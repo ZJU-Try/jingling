@@ -1,0 +1,10 @@
+# 微信小游戏开发工具生成
+miniprogram_npm/
+node_modules/
+
+# 私有配置（含 appid 等敏感信息）
+project.private.config.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
