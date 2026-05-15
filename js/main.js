@@ -178,12 +178,26 @@ export default class Main {
     return 'images/leaders/leader' + areaId + '.png';
   }
 
-  drawBox(x, y, w, h, border, fill) {
+  drawBox(x, y, w, h, border, fill, r) {
+    const radius = (r === undefined ? 10 : r);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+    ctx.arcTo(x + w, y, x + w, y + radius, radius);
+    ctx.lineTo(x + w, y + h - radius);
+    ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
+    ctx.lineTo(x + radius, y + h);
+    ctx.arcTo(x, y + h, x, y + h - radius, radius);
+    ctx.lineTo(x, y + radius);
+    ctx.arcTo(x, y, x + radius, y, radius);
+    ctx.closePath();
     ctx.fillStyle = fill;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = border;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, w, h);
+    ctx.fill();
+    if (border && border !== 'transparent') {
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
   }
 
   drawText(text, x, y, size, color, align) {
@@ -222,8 +236,13 @@ export default class Main {
   addButton(x, y, w, h, text, onTap, options) {
     const style = options || {};
     this.buttons.push({ x, y, w, h, onTap, silent: style.silent });
-    this.drawBox(x, y, w, h, style.border || COLORS.border, style.fill || COLORS.panel2);
-    this.drawText(text, x + w / 2, y + (h - (style.fontSize || 16)) / 2, style.fontSize || 16, style.color || COLORS.text, 'center');
+    if (style.fill !== 'transparent') {
+      this.drawBox(x, y, w, h, style.border || COLORS.border, style.fill || COLORS.panel2);
+    }
+    if (text) {
+      const fs = style.fontSize || 16;
+      this.drawText(text, x + w / 2, y + (h - fs) / 2, fs, style.color || COLORS.text, 'center');
+    }
   }
 
   drawTopBar(title, subtitle) {
@@ -1636,13 +1655,13 @@ export default class Main {
     }
 
     const itemH = 44;
-    const availH = SCREEN_HEIGHT - tbH - 70;
+    const availH = SCREEN_HEIGHT - tbH - 78;
     const pageSize = Math.floor(availH / itemH);
     const pgData = paginate(allItems, this.databus.getPage(pageKey), pageSize);
     this.databus.setPage(pageKey, pgData.page);
 
-    // 背景框
-    this.drawBox(8, tbH + 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - tbH - 72, '#1a2636', '#060d18');
+    // 背景框（底部留 68px 给按钮）
+    this.drawBox(8, tbH + 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - tbH - 76, '#1a2636', '#060d18');
 
     // 日志条目
     let iy = tbH + 22;
@@ -1662,8 +1681,7 @@ export default class Main {
     }
 
     // 分页按钮
-    const paginateAreaH = SCREEN_HEIGHT - tbH - 70;
-    const btnY = tbH + paginateAreaH + 18;
+    const btnY = SCREEN_HEIGHT - 60;
     this.addButton(8, btnY, 100, 44, '← 返回', () => {
       this.gotoScreen('start');
     }, { border: COLORS.green, color: COLORS.green, fill: '#051a10', fontSize: 16 });
