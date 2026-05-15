@@ -9,6 +9,8 @@ canvas.height = windowInfo.screenHeight;
 export const SCREEN_WIDTH = windowInfo.screenWidth;
 export const SCREEN_HEIGHT = windowInfo.screenHeight;
 export const PIXEL_RATIO = windowInfo.pixelRatio || 1;
+// 状态栏 + 胶囊按钮区域高度（防止内容被微信导航遮挡）
+export const SAFE_TOP = (windowInfo.statusBarHeight || 20) + 4;
 
 // 适配设计稿尺寸 (375x667) 缩放系数
 export const DESIGN_WIDTH = 375;

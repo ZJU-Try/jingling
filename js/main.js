@@ -1,6 +1,6 @@
 import './render';
 import DataBus from './databus';
-import { SCREEN_WIDTH, SCREEN_HEIGHT } from './render';
+import { SCREEN_WIDTH, SCREEN_HEIGHT, SAFE_TOP } from './render';
 import { AREAS, getArea, getScene } from './data/areas';
 import { ITEMS, SHOP_ITEMS_BY_AREA } from './data/items';
 import { SPIRIT_TEMPLATES, EVOLUTION_TEMPLATES, createSpiritInstance } from './data/spirits';
@@ -104,88 +104,17 @@ export default class Main {
   }
 
   setupAudio() {
-    this.audio = {
-      click: wx.createInnerAudioContext(),
-      attack: wx.createInnerAudioContext(),
-      victory: wx.createInnerAudioContext(),
-      bgmExplore: wx.createInnerAudioContext(),
-      bgmBattle: wx.createInnerAudioContext(),
-    };
-    this.audio.click.src = 'audio/click.mp3';
-    this.audio.attack.src = 'audio/attack.mp3';
-    this.audio.victory.src = 'audio/victory.mp3';
-    this.audio.bgmExplore.src = 'audio/bgm_explore.mp3';
-    this.audio.bgmBattle.src = 'audio/bgm_battle.mp3';
-    this.audio.bgmExplore.loop = true;
-    this.audio.bgmBattle.loop = true;
-    this.audio.click.volume = 0.6;
-    this.audio.attack.volume = 0.6;
-    this.audio.victory.volume = 0.7;
-    this.audio.bgmExplore.volume = 0.4;
-    this.audio.bgmBattle.volume = 0.4;
+    // 音效暂时关闭
+    this.audio = {};
   }
 
-  stopAllBgm() {
-    this.audio.bgmExplore.stop();
-    this.audio.bgmBattle.stop();
-  }
-
-  playClick() {
-    if (!this.databus.state.musicEnabled) return;
-    try {
-      this.audio.click.stop();
-      this.audio.click.play();
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  playAttack() {
-    if (!this.databus.state.musicEnabled) return;
-    try {
-      this.audio.attack.stop();
-      this.audio.attack.play();
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  playVictory() {
-    if (!this.databus.state.musicEnabled) return;
-    try {
-      this.audio.victory.stop();
-      this.audio.victory.play();
-    } catch (e) {
-      console.error(e);
-    }
-  }
+  stopAllBgm() {}
+  playClick() {}
+  playAttack() {}
+  playVictory() {}
 
   syncBgm() {
-    const state = this.databus.state;
-    if (!state.musicEnabled) {
-      this.currentBgm = '';
-      this.stopAllBgm();
-      return;
-    }
-
-    const isBattle = state.screen === 'battle' || state.screen === 'gymBattle';
-    const isExplore = state.screen === 'explore';
-    if (isBattle && this.currentBgm !== 'battle') {
-      this.stopAllBgm();
-      this.currentBgm = 'battle';
-      this.audio.bgmBattle.play();
-      return;
-    }
-    if (isExplore && this.currentBgm !== 'explore') {
-      this.stopAllBgm();
-      this.currentBgm = 'explore';
-      this.audio.bgmExplore.play();
-      return;
-    }
-    if (!isBattle && !isExplore && this.currentBgm) {
-      this.currentBgm = '';
-      this.stopAllBgm();
-    }
+    // 音频暂时关闭
   }
 
   onTouchStart(e) {
@@ -298,12 +227,16 @@ export default class Main {
 
   drawTopBar(title, subtitle) {
     const state = this.databus.state;
-    this.drawBox(0, 0, SCREEN_WIDTH, 64, '#14223f', '#070d18');
-    this.drawText(title || '九州灵绘卷', 12, 9, 22, COLORS.green);
-    if (subtitle) this.drawText(subtitle, 12, 38, 12, COLORS.dim);
+    const barH = 64 + SAFE_TOP;
+    this.drawBox(0, 0, SCREEN_WIDTH, barH, '#14223f', '#070d18');
+    this.drawText(title || '九州灵绘卷', 12, SAFE_TOP + 9, 22, COLORS.green);
+    if (subtitle) this.drawText(subtitle, 12, SAFE_TOP + 38, 12, COLORS.dim);
+    this.drawText('铜钱 ' + state.player.gold, SCREEN_WIDTH - 12, SAFE_TOP + 10, 16, COLORS.yellow, 'right');
+    this.drawText('解锁 ' + state.player.highestAreaUnlocked + '/9', SCREEN_WIDTH - 12, SAFE_TOP + 34, 12, COLORS.dim, 'right');
+  }
 
-    this.drawText('铜钱 ' + state.player.gold, SCREEN_WIDTH - 12, 10, 16, COLORS.yellow, 'right');
-    this.drawText('解锁 ' + state.player.highestAreaUnlocked + '/9', SCREEN_WIDTH - 12, 34, 12, COLORS.dim, 'right');
+  get topBarH() {
+    return 64 + SAFE_TOP;
   }
 
   drawLogPanel() {
@@ -714,59 +647,53 @@ export default class Main {
   drawStartScreen() {
     const state = this.databus.state;
     const cx = SCREEN_WIDTH / 2;
-    const cy = SCREEN_HEIGHT / 2;
 
-    // 标题区域：垂直居中偏上
-    const titleY = cy - 140;
+    // 扫描线背景（仿 nine 版微弱扫描线效果）
+    for (let scanY = 0; scanY < SCREEN_HEIGHT; scanY += 4) {
+      ctx.fillStyle = 'rgba(0,255,0,0.012)';
+      ctx.fillRect(0, scanY + 2, SCREEN_WIDTH, 1);
+    }
 
-    // 标题背景光晕
-    const grd = ctx.createRadialGradient(cx, titleY + 10, 0, cx, titleY + 10, 140);
-    grd.addColorStop(0, 'rgba(0,200,80,0.07)');
+    // 内容块高度：标题区120px + 间距40px + 按钮区120px = 280px，垂直居中
+    const contentH = 280;
+    const contentTop = (SCREEN_HEIGHT - contentH) / 2;
+
+    // 主标题位置（基准线）
+    const titleY = contentTop + 48;
+
+    // 标题背光晕
+    const grd = ctx.createRadialGradient(cx, titleY, 0, cx, titleY, 160);
+    grd.addColorStop(0, 'rgba(0,255,80,0.06)');
     grd.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grd;
-    ctx.fillRect(cx - 140, titleY - 50, 280, 140);
+    ctx.fillRect(0, titleY - 60, SCREEN_WIDTH, 200);
 
-    // 主标题
+    // 主标题：✧ 九州灵绘卷 ✧（对应 nine 版 text-4xl green-400 tracking-wider）
     this.drawText('✧ 九州灵绘卷 ✧', cx, titleY, 44, COLORS.green, 'center');
 
-    // 英文副标题
-    this.drawText('JIUZHOU SPIRIT SCROLL', cx, titleY + 56, 19, '#4a6a5a', 'center');
+    // 英文副标题（对应 nine 版 text-gray-600 font-mono tracking-widest）
+    this.drawText('JIUZHOU SPIRIT SCROLL', cx, titleY + 52, 18, '#374747', 'center');
 
-    // 装饰横线
-    const lineY = titleY + 88;
-    ctx.save();
-    ctx.strokeStyle = '#1e3d2a';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx - 140, lineY);
-    ctx.lineTo(cx + 140, lineY);
-    ctx.stroke();
-    // 中心小菱形
-    ctx.fillStyle = '#2a5a38';
-    ctx.beginPath();
-    ctx.moveTo(cx, lineY - 4);
-    ctx.lineTo(cx + 5, lineY);
-    ctx.lineTo(cx, lineY + 4);
-    ctx.lineTo(cx - 5, lineY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    // 副标语（对应 nine 版 text-gray-700 text-sm）
+    this.drawText('收集精灵 · 挑战道馆 · 成为御灵大师', cx, titleY + 80, 15, '#334040', 'center');
 
-    // 副标语
-    this.drawText('收集精灵 · 挑战道馆 · 成为御灵大师', cx, lineY + 26, 17, '#556070', 'center');
+    // 按钮区：max-w-xs = 320px，居中（对应 nine 版 w-full max-w-xs）
+    const btnW = Math.min(SCREEN_WIDTH - 56, 320);
+    const btnX = Math.round((SCREEN_WIDTH - btnW) / 2);
+    const btnY = contentTop + contentH - 118;
 
-    // 按钮区域
-    const btnY = cy + 30;
-    this.addButton(cx - 220, btnY, 440, 72, state.hasSave ? '继续冒险' : '开始冒险', () => {
+    // 主按钮（对应 nine 版 border-2 border-green-400 py-4 text-lg rounded-lg）
+    this.addButton(btnX, btnY, btnW, 58, state.hasSave ? '继续冒险' : '开始冒险', () => {
       this.gotoScreen('saveManager');
-    }, { border: COLORS.green, color: COLORS.green, fill: '#051a10', fontSize: 32 });
+    }, { border: COLORS.green, color: COLORS.green, fill: '#000', fontSize: 28 });
 
-    this.addButton(cx - 220, btnY + 88, 440, 54, '更新日志', () => {
+    // 次级按钮（对应 nine 版 border border-gray-700 text-gray-400 py-3）
+    this.addButton(btnX, btnY + 70, btnW, 46, '更新日志', () => {
       this.gotoScreen('changelog');
-    }, { border: '#253548', color: '#6a7e9a', fill: '#07101e', fontSize: 22 });
+    }, { border: '#374151', color: '#6b7280', fill: '#000', fontSize: 20 });
 
-    // 版本号
-    this.drawText('v1.7.0', cx, SCREEN_HEIGHT - 44, 18, '#2c3648', 'center');
+    // 版本号（对应 nine 版 text-gray-800 text-xs mt-8）
+    this.drawText('v1.7.0', cx, SCREEN_HEIGHT - 36, 14, '#1f2937', 'center');
   }
 
   drawSaveManager() {
@@ -782,7 +709,7 @@ export default class Main {
     const pageData = paginate(slots, this.databus.getPage('saveManager'), SAVE_PAGE_SIZE);
     this.databus.setPage('saveManager', pageData.page);
 
-    let y = 86;
+    let y = this.topBarH + 18;
     for (let i = 0; i < pageData.list.length; i++) {
       const slot = pageData.list[i];
         const h = 150;
@@ -851,7 +778,7 @@ export default class Main {
     const state = this.databus.state;
     this.drawTopBar(fromReward ? '奖励 - 选择初始精灵' : '选择初始精灵', fromReward ? '每只初始精灵仅可领取一次' : '新存档将以该精灵开局');
 
-    let y = 90;
+    let y = this.topBarH + 18;
     for (let i = 0; i < STARTERS.length; i++) {
       const id = STARTERS[i];
       const temp = SPIRIT_TEMPLATES[id];
@@ -1206,7 +1133,7 @@ export default class Main {
     const pageData = paginate(state.inventory, this.databus.getPage('inventory'), 6);
     this.databus.setPage('inventory', pageData.page);
 
-    let y = 82;
+    let y = this.topBarH + 14;
     for (let i = 0; i < pageData.list.length; i++) {
       const slot = pageData.list[i];
       const item = ITEMS[slot.itemId];
@@ -1239,7 +1166,8 @@ export default class Main {
     const areaId = state.player.currentAreaId;
     this.drawTopBar('商店', this.shopTab === 'buy' ? '购买补给' : '出售背包物品');
 
-    this.addButton(16, 80, 220, 44, '购买', () => {
+    const shopTabY = this.topBarH + 12;
+    this.addButton(16, shopTabY, 220, 44, '购买', () => {
       this.shopTab = 'buy';
       this.databus.setPage('shop', 0);
     }, {
@@ -1249,7 +1177,7 @@ export default class Main {
       fontSize: 20,
     });
 
-    this.addButton(248, 80, 220, 44, '出售', () => {
+    this.addButton(248, shopTabY, 220, 44, '出售', () => {
       this.shopTab = 'sell';
       this.databus.setPage('shop', 0);
     }, {
@@ -1325,7 +1253,7 @@ export default class Main {
     const pageData = paginate(state.spirits, this.databus.getPage('spiritManage'), 5);
     this.databus.setPage('spiritManage', pageData.page);
 
-    let y = 82;
+    let y = this.topBarH + 14;
     for (let i = 0; i < pageData.list.length; i++) {
       const sp = pageData.list[i];
       const index = state.spirits.indexOf(sp);
@@ -1367,7 +1295,8 @@ export default class Main {
     const state = this.databus.state;
     this.drawTopBar('精灵站', this.stationTab === 'withdraw' ? '取出 / 出售站内精灵' : '将背包精灵存入精灵站');
 
-    this.addButton(16, 80, 220, 44, '取出/出售', () => {
+    const stationTabY = this.topBarH + 12;
+    this.addButton(16, stationTabY, 220, 44, '取出/出售', () => {
       this.stationTab = 'withdraw';
       this.databus.setPage('spiritStation', 0);
     }, {
@@ -1376,7 +1305,7 @@ export default class Main {
       fill: '#081322',
       fontSize: 20,
     });
-    this.addButton(248, 80, 220, 44, '存入', () => {
+    this.addButton(248, stationTabY, 220, 44, '存入', () => {
       this.stationTab = 'deposit';
       this.databus.setPage('spiritStation', 0);
     }, {
@@ -1456,7 +1385,7 @@ export default class Main {
     const pageData = paginate(ALL_REWARDS, this.databus.getPage('rewards'), 6);
     this.databus.setPage('rewards', pageData.page);
 
-    let y = 82;
+    let y = this.topBarH + 14;
     for (let i = 0; i < pageData.list.length; i++) {
       const reward = pageData.list[i];
       const met = maxLv >= reward.target;
@@ -1533,7 +1462,7 @@ export default class Main {
       const row = Math.floor(i / cols);
       const col = i % cols;
       const x = 16 + col * (cardW + gap);
-      const y = 82 + row * (cardH + 10);
+      const y = this.topBarH + 14 + row * (cardH + 10);
       const met = state.encounteredSpirits.includes(en.id);
         // 已遇见：绿色边框，未遇见：暗色边框
         const borderColor = met ? '#2d8c5a' : '#3a4450';
@@ -1580,7 +1509,8 @@ export default class Main {
     const met = state.encounteredSpirits.includes(entry.id);
 
     this.drawTopBar('图鉴详情', met ? entry.name : '???');
-    this.drawBox(16, 82, SCREEN_WIDTH - 32, 542, '#2a3652', '#071020');
+    const detailTop = this.topBarH + 14;
+    this.drawBox(16, detailTop, SCREEN_WIDTH - 32, SCREEN_HEIGHT - detailTop - 80, '#2a3652', '#071020');
 
     if (met) {
       const ok = this.drawImageSafe(this.getSpiritImagePath(entry.id), 26, 94, 132, 132);
@@ -1618,20 +1548,98 @@ export default class Main {
   }
 
   drawChangelogScreen() {
-    this.drawTopBar('更新日志', 'v1.7.0');
-    this.drawBox(16, 82, SCREEN_WIDTH - 32, 542, '#2a3652', '#071020');
-    const lines = [
-      '1. 修复升级属性异常。',
-      '2. 战斗结算强化。',
-      '3. 新增奖励、图鉴、精灵站模块。',
-      '4. 新增多存档槽管理。',
-      '5. 新增素材化界面渲染。',
-      '6. 新增BGM/SFX与战斗反馈动画。',
+    const CHANGELOG = [
+      { version: 'v1.7.0', items: [
+        '修复精灵升级后属性不增加的严重bug',
+        '战斗结算改为按精灵逐个显示（经验→升级→属性→技能）',
+        '终局结算属性提升日志中显示当前等级',
+        '所有物品新增像素风主图（解决背包图片破图）',
+        '存档管理显示已解锁区域数量',
+        '更新日志移除激活码相关说明',
+        '选择初始精灵界面优化',
+      ]},
+      { version: 'v1.6.0', items: [
+        '新增精灵小袁（木系短毛猫）和黑妹（雷系小狗），初始选择增至5只',
+        '新增5种稀有收集品，探索与战斗低概率掉落',
+        '所有物品新增像素风主图，商店和背包中显示',
+        '道馆馆主新增像素风大图，战斗界面炫酷展示',
+        '每日登录赠送100张自动探索券，弹框提示',
+        '自动战斗券不足时按钮灰显禁用',
+        '全局字体放大，适配手机屏幕',
+        '存档管理显示精灵站数量，字体和高度优化',
+        '修复自动战斗后不回驿站恢复的bug',
+      ]},
+      { version: 'v1.5.0', items: [
+        '新增精灵站系统（全局互通），可存放精灵、时间增长经验、出售精灵',
+        '新增自动探索券系统，每次自动探索消耗1张',
+        '新增自动战斗模式（最强技能+战后恢复循环）',
+        '新增音乐开关和音效系统',
+        '新增每日登录奖励（100张探索券）',
+        '精灵进化时属性大幅提升（+30%进化加成）',
+        '道馆战新增馆主像素风图片',
+        '新增经验券系统（初级/中级/高级）',
+      ]},
+      { version: 'v1.0.0', items: [
+        '游戏首发：九州灵绘卷正式上线',
+        '9大区域探索系统',
+        '精灵收集/战斗/捕捉/养成系统',
+        '3只初始精灵选择（蛋挞/小白/麦兜）',
+        '道馆挑战系统（9位馆主）',
+        '商店/背包/精灵管理系统',
+        '多存档系统（8个存档槽）',
+      ]},
     ];
-    for (let i = 0; i < lines.length; i++) {
-      this.drawText(lines[i], 28, 104 + i * 54, 24, '#b6c5e4');
+
+    this.drawTopBar('更新日志', 'v1.7.0');
+    const tbH = this.topBarH;
+    const pageKey = 'changelog';
+    const allItems = [];
+    for (let g = 0; g < CHANGELOG.length; g++) {
+      allItems.push({ type: 'version', text: CHANGELOG[g].version });
+      for (let k = 0; k < CHANGELOG[g].items.length; k++) {
+        allItems.push({ type: 'item', text: CHANGELOG[g].items[k] });
+      }
     }
-    this.addButton(16, SCREEN_HEIGHT - 176, 452, 50, '返回', () => this.gotoScreen('start'), { border: '#2f3a56', color: COLORS.dim, fill: '#080f1f', fontSize: 20 });
+
+    const itemH = 44;
+    const availH = SCREEN_HEIGHT - tbH - 70;
+    const pageSize = Math.floor(availH / itemH);
+    const pgData = paginate(allItems, this.databus.getPage(pageKey), pageSize);
+    this.databus.setPage(pageKey, pgData.page);
+
+    // 背景框
+    this.drawBox(8, tbH + 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - tbH - 72, '#1a2636', '#060d18');
+
+    // 日志条目
+    let iy = tbH + 22;
+    for (let i = 0; i < pgData.list.length; i++) {
+      const entry = pgData.list[i];
+      if (entry.type === 'version') {
+        // 版本标题：绿色粗体 + 左边绿色竖线
+        ctx.fillStyle = COLORS.green;
+        ctx.fillRect(18, iy - 2, 3, 26);
+        this.drawText(entry.text, 28, iy, 22, COLORS.green);
+      } else {
+        // 条目：灰色 + › 符号
+        this.drawText('›', 26, iy, 18, '#2a5a38');
+        this.drawWrappedText(entry.text, 44, iy, SCREEN_WIDTH - 68, 18, '#6b7a94', 14, 1);
+      }
+      iy += itemH;
+    }
+
+    // 分页按钮
+    const btnY = SCREEN_HEIGHT - 58;
+    this.addButton(8, btnY, 100, 44, '上一页', () => {
+      this.databus.setPage(pageKey, pgData.page - 1);
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#060d18', fontSize: 16 });
+    this.addButton(SCREEN_WIDTH - 108, btnY, 100, 44, '下一页', () => {
+      this.databus.setPage(pageKey, pgData.page + 1);
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#060d18', fontSize: 16 });
+    this.addButton(Math.round((SCREEN_WIDTH - 180) / 2), btnY, 180, 44, '关闭', () => {
+      this.gotoScreen('start');
+    }, { border: COLORS.green, color: COLORS.green, fill: '#051a10', fontSize: 18 });
+
+    this.drawText((pgData.page + 1) + '/' + pgData.totalPages, SCREEN_WIDTH / 2, btnY + 14, 14, '#3f4f6a', 'center');
   }
 
   render() {
