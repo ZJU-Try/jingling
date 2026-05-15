@@ -1,6 +1,6 @@
 import './render';
 import DataBus from './databus';
-import { SCREEN_WIDTH, SCREEN_HEIGHT, SAFE_TOP } from './render';
+import { SCREEN_WIDTH, SCREEN_HEIGHT, SAFE_TOP, SAFE_BOTTOM } from './render';
 import { AREAS, getArea, getScene } from './data/areas';
 import { ITEMS, SHOP_ITEMS_BY_AREA } from './data/items';
 import { SPIRIT_TEMPLATES, EVOLUTION_TEMPLATES, createSpiritInstance } from './data/spirits';
@@ -245,14 +245,16 @@ export default class Main {
     }
   }
 
-  drawTopBar(title, subtitle) {
+  drawTopBar(title, subtitle, showPlayerInfo) {
     const state = this.databus.state;
     const barH = 64 + SAFE_TOP;
-    this.drawBox(0, 0, SCREEN_WIDTH, barH, '#14223f', '#070d18');
+    this.drawBox(0, 0, SCREEN_WIDTH, barH, '#14223f', '#070d18', 0);
     this.drawText(title || '九州灵绘卷', 12, SAFE_TOP + 9, 22, COLORS.green);
     if (subtitle) this.drawText(subtitle, 12, SAFE_TOP + 38, 12, COLORS.dim);
-    this.drawText('铜钱 ' + state.player.gold, SCREEN_WIDTH - 12, SAFE_TOP + 10, 16, COLORS.yellow, 'right');
-    this.drawText('解锁 ' + state.player.highestAreaUnlocked + '/9', SCREEN_WIDTH - 12, SAFE_TOP + 34, 12, COLORS.dim, 'right');
+    if (showPlayerInfo !== false) {
+      this.drawText('铜钱 ' + state.player.gold, SCREEN_WIDTH - 12, SAFE_TOP + 10, 16, COLORS.yellow, 'right');
+      this.drawText('解锁 ' + state.player.highestAreaUnlocked + '/9', SCREEN_WIDTH - 12, SAFE_TOP + 34, 12, COLORS.dim, 'right');
+    }
   }
 
   get topBarH() {
@@ -718,7 +720,7 @@ export default class Main {
 
   drawSaveManager() {
     const state = this.databus.state;
-    this.drawTopBar('存档管理', '选择存档读取或创建新存档');
+    this.drawTopBar('存档管理', '选择存档读取或创建新存档', false);
 
     const slots = [];
     for (let i = 1; i <= 8; i++) {
@@ -811,7 +813,7 @@ export default class Main {
     }
 
     // 底部导航栏
-    const navY = SCREEN_HEIGHT - 60;
+    const navY = SCREEN_HEIGHT - SAFE_BOTTOM - 60;
     this.addButton(12, navY, 110, 46, '← 返回', () => {
       this.confirmDeleteSlot = null;
       this.gotoScreen('start');
@@ -870,52 +872,113 @@ export default class Main {
   drawAreaSelectScreen() {
     const state = this.databus.state;
     this.drawTopBar('神州大地', '选择你要前往的区域');
+    const tbH = this.topBarH;
 
-      this.addButton(16, 78, 164, 42, '奖励', () => this.gotoScreen('rewards'), { border: '#6a5d2d', color: COLORS.yellow, fill: '#1a1608', fontSize: 20 });
-      this.addButton(188, 78, 164, 42, '图鉴', () => this.gotoScreen('pokedex'), { border: '#2d586a', color: COLORS.cyan, fill: '#08161a', fontSize: 20 });
-      this.addButton(360, 78, 88, 42, '存档', () => this.quickSave(), { border: '#355d7d', color: '#8ee7ff', fill: '#081826', fontSize: 16 });
+    // 操作行：存档管理 / 快存 / 主菜单
+    const actY = tbH + 8;
+    const actW = Math.floor((SCREEN_WIDTH - 24 - 12) / 3);
+    this.addButton(12, actY, actW, 36, '← 存档管理', () => this.gotoScreen('saveManager'), {
+      border: '#2a3656', color: '#8ea8d8', fill: '#060c18', fontSize: 14,
+    });
+    this.addButton(12 + actW + 6, actY, actW, 36, '💾 快速存档', () => this.quickSave(), {
+      border: '#1a4060', color: COLORS.cyan, fill: '#060f18', fontSize: 14,
+    });
+    this.addButton(12 + (actW + 6) * 2, actY, actW, 36, '↩ 主菜单', () => this.returnToTitle(), {
+      border: '#302040', color: '#8a7aaa', fill: '#0c0818', fontSize: 14,
+    });
 
-    const pageData = paginate(AREAS, this.databus.getPage('areaSelect'), 4);
+    // 快捷入口：奖励
+    const maxLv = state.spirits.length > 0 ? Math.max(...state.spirits.map(s => s.level || 1)) : 1;
+    const hasUnclaimed = ALL_REWARDS.some(r => maxLv >= r.target && !state.claimedRewards.includes(r.id));
+    const sc1Y = actY + 36 + 6;
+    this.addButton(12, sc1Y, SCREEN_WIDTH - 24, 42, hasUnclaimed ? '🎁  奖励  · 有奖励可领取！' : '🎁  奖励', () => this.gotoScreen('rewards'), {
+      border: hasUnclaimed ? COLORS.yellow : '#3a2e14',
+      color: hasUnclaimed ? COLORS.yellow : '#7a6030',
+      fill: '#0a0900', fontSize: 17,
+    });
+    this.drawText('›', SCREEN_WIDTH - 22, sc1Y + 12, 20, hasUnclaimed ? COLORS.yellow : '#4a3a18');
+
+    // 快捷入口：图鉴
+    const sc2Y = sc1Y + 42 + 6;
+    this.addButton(12, sc2Y, SCREEN_WIDTH - 24, 42, '📖  精灵图鉴', () => this.gotoScreen('pokedex'), {
+      border: '#163626', color: '#4a9a6a', fill: '#040c07', fontSize: 17,
+    });
+    this.drawText('›', SCREEN_WIDTH - 22, sc2Y + 12, 20, '#2a6040');
+
+    // 区域列表
+    const listStartY = sc2Y + 42 + 8;
+    const navY = SCREEN_HEIGHT - SAFE_BOTTOM - 60;
+    const PAGE_SIZE = 3;
+    const cardH = Math.min(148, Math.max(100, Math.floor((navY - listStartY - 8 - (PAGE_SIZE - 1) * 8) / PAGE_SIZE)));
+
+    const pageData = paginate(AREAS, this.databus.getPage('areaSelect'), PAGE_SIZE);
     this.databus.setPage('areaSelect', pageData.page);
 
-      let y = 130;
+    let y = listStartY;
     for (let i = 0; i < pageData.list.length; i++) {
       const area = pageData.list[i];
       const locked = area.id > state.player.highestAreaUnlocked;
       const current = area.id === state.player.currentAreaId;
+      const completed = !locked && area.id < state.player.currentAreaId;
 
-        this.drawBox(16, y, SCREEN_WIDTH - 32, 120, locked ? '#3a444f' : current ? '#2d8c5a' : '#2f79b0', '#07101f');
-        this.drawText(area.id + '. ' + area.name, 26, y + 10, 28, locked ? '#67728d' : COLORS.text);
-        this.drawWrappedText(area.description, 26, y + 48, SCREEN_WIDTH - 180, 20, '#8fa1c8', 16, 2);
+      const borderCol = locked ? '#1e2030' : completed ? COLORS.cyan : current ? COLORS.green : '#2f5880';
+      this.drawBox(12, y, SCREEN_WIDTH - 24, cardH, borderCol, locked ? '#050810' : '#06101a');
 
-      const leaderPath = this.getLeaderImagePath(area.id);
-        this.drawImageSafe(leaderPath, SCREEN_WIDTH - 134, y + 14, 96, 96);
+      // 区域名称
+      ctx.font = '22px sans-serif';
+      const nameStr = area.id + '. ' + area.name;
+      const nameW = ctx.measureText(nameStr).width;
+      this.drawText(nameStr, 24, y + 12, 22, locked ? '#4a5068' : COLORS.text);
 
-        this.addButton(SCREEN_WIDTH - 132, y + 72, 96, 36, locked ? '未解锁' : (current ? '当前' : '进入'), () => {
+      // 状态徽章（内联在名称右侧）
+      const badgeText = locked ? '未解锁' : completed ? '已通关' : current ? '当前' : '已解锁';
+      const badgeCol = locked ? '#3a404e' : completed ? COLORS.cyan : current ? COLORS.green : '#5090b8';
+      const badgeBg = locked ? '#080a10' : completed ? '#06202c' : current ? '#06200e' : '#081828';
+      const badgeW = badgeText.length * 13 + 14;
+      const badgeX = Math.min(24 + nameW + 10, SCREEN_WIDTH - badgeW - 110);
+      this.drawBox(badgeX, y + 12, badgeW, 22, badgeCol, badgeBg);
+      this.drawText(badgeText, badgeX + 7, y + 15, 13, badgeCol);
+
+      if (!locked) {
+        const imgS = Math.min(cardH - 20, 110);
+        const imgX = SCREEN_WIDTH - 12 - imgS - 8;
+        const textMaxW = imgX - 30;
+
+        // 简短描述
+        this.drawWrappedText(area.description, 24, y + 42, textMaxW, 19, '#8fa1c8', 14, 2);
+
+        // 馆长 + 场景数（底部）
+        this.drawText('馆长: ' + area.gymLeader.name + '   场景: ' + area.scenes.length + '个', 24, y + cardH - 24, 13, '#4a5a74');
+
+        // 馆主图片
+        const didDraw = this.drawImageSafe(this.getLeaderImagePath(area.id), imgX, y + 10, imgS, imgS);
+        if (!didDraw) {
+          this.drawBox(imgX, y + 10, imgS, imgS, '#1a2a3a', '#050d18');
+          this.drawText(area.id + '', imgX + imgS / 2, y + 10 + imgS / 2 - 12, 24, '#3a5a7a', 'center');
+        }
+
+        // 右箭头
+        this.drawText('›', SCREEN_WIDTH - 18, y + cardH / 2 - 11, 22, '#2a4a6a');
+      }
+
+      // 整卡点击区域（透明覆盖）
+      this.addButton(12, y, SCREEN_WIDTH - 24, cardH, '', () => {
         if (!locked) this.moveToArea(area.id);
-      }, {
-        border: locked ? '#444f68' : current ? '#2d8c5a' : '#2f79b0',
-        color: locked ? '#65728d' : (current ? COLORS.green : COLORS.cyan),
-        fill: '#091121',
-          fontSize: 16,
-      });
+        else this.setToast('该区域尚未解锁。');
+      }, { border: 'transparent', fill: 'transparent', silent: true });
 
-        y += 132;
+      y += cardH + 8;
     }
 
-    this.addButton(16, SCREEN_HEIGHT - 176, 110, 50, '上一页', () => {
+    // 底部分页
+    const pageX = Math.round((SCREEN_WIDTH - 200) / 2);
+    this.addButton(pageX, navY, 92, 46, '◀ 上一页', () => {
       this.databus.setPage('areaSelect', pageData.page - 1);
-    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 18 });
-
-    this.addButton(134, SCREEN_HEIGHT - 176, 110, 50, '下一页', () => {
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 16 });
+    this.addButton(pageX + 100, navY, 92, 46, '下一页 ▶', () => {
       this.databus.setPage('areaSelect', pageData.page + 1);
-    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 18 });
-
-    this.addButton(252, SCREEN_HEIGHT - 176, 110, 50, '返回', () => this.gotoScreen('saveManager'), { border: '#2f3a56', color: COLORS.dim, fill: '#080f1f', fontSize: 18 });
-    this.addButton(370, SCREEN_HEIGHT - 176, 98, 50, state.musicEnabled ? '音效开' : '音效关', () => {
-      const enabled = this.databus.toggleMusic();
-      if (!enabled) this.stopAllBgm();
-    }, { border: '#2f3a56', color: state.musicEnabled ? COLORS.green : '#7a86a6', fill: '#080f1f', fontSize: 16 });
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 16 });
+    this.drawText((pageData.page + 1) + '/' + pageData.totalPages, SCREEN_WIDTH / 2, navY + 14, 13, '#3f4f6a', 'center');
   }
 
   drawExploreScreen() {
@@ -1643,7 +1706,7 @@ export default class Main {
       ]},
     ];
 
-    this.drawTopBar('更新日志', 'v1.7.0');
+    this.drawTopBar('更新日志', 'v1.7.0', false);
     const tbH = this.topBarH;
     const pageKey = 'changelog';
     const allItems = [];
@@ -1681,7 +1744,6 @@ export default class Main {
     }
 
     // 分页按钮
-    const btnY = SCREEN_HEIGHT - 60;
     this.addButton(8, btnY, 100, 44, '← 返回', () => {
       this.gotoScreen('start');
     }, { border: COLORS.green, color: COLORS.green, fill: '#051a10', fontSize: 16 });
