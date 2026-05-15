@@ -812,8 +812,8 @@ export default class Main {
       y += cardH + 10;
     }
 
-    // 底部导航栏
-    const navY = SCREEN_HEIGHT - SAFE_BOTTOM - 60;
+    // 底部导航栏（logPanel 高88px，按钮需在其上方）
+    const navY = SCREEN_HEIGHT - SAFE_BOTTOM - 88 - 54;
     this.addButton(12, navY, 110, 46, '← 返回', () => {
       this.confirmDeleteSlot = null;
       this.gotoScreen('start');
@@ -907,7 +907,8 @@ export default class Main {
 
     // 区域列表
     const listStartY = sc2Y + 42 + 8;
-    const navY = SCREEN_HEIGHT - SAFE_BOTTOM - 60;
+    // navY：日志栏高88px，按钮46px，上下各6px间距
+    const navY = SCREEN_HEIGHT - SAFE_BOTTOM - 88 - 54;
     const PAGE_SIZE = 3;
     const cardH = Math.min(148, Math.max(100, Math.floor((navY - listStartY - 8 - (PAGE_SIZE - 1) * 8) / PAGE_SIZE)));
 
