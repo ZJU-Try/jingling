@@ -91,6 +91,7 @@ export default class Main {
     this.battleMenu = 'main';
     this.shopTab = 'buy';
     this.stationTab = 'withdraw';
+    this.confirmDeleteSlot = null;
 
     this.touchHandler = this.onTouchStart.bind(this);
     wx.onTouchStart(this.touchHandler);
@@ -709,69 +710,102 @@ export default class Main {
     const pageData = paginate(slots, this.databus.getPage('saveManager'), SAVE_PAGE_SIZE);
     this.databus.setPage('saveManager', pageData.page);
 
-    let y = this.topBarH + 18;
+    let y = this.topBarH + 10;
     for (let i = 0; i < pageData.list.length; i++) {
       const slot = pageData.list[i];
-        const h = 150;
-        const borderColor = slot.empty ? '#3a444f' : '#2a3652';
-        const fillColor = slot.empty ? '#0a0f15' : '#060d1a';
-      
-        this.drawBox(16, y, SCREEN_WIDTH - 32, h, borderColor, fillColor);
-      
-        // 存档编号
-        this.drawText('存档 ' + slot.slotId, 30, y + 12, 26, slot.empty ? '#5a6984' : COLORS.text);
+      const cardH = slot.empty ? 76 : 132;
 
       if (slot.empty) {
-          this.drawText('空位', 30, y + 50, 20, '#68728f');
-          this.addButton(SCREEN_WIDTH - 120, y + 42, 100, 50, '新建', () => {
+        // 空位：虚线边框风格
+        this.drawBox(12, y, SCREEN_WIDTH - 24, cardH, '#1e2830', '#060a10');
+        ctx.save();
+        ctx.strokeStyle = '#2a3a4a';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 5]);
+        ctx.strokeRect(12.5, y + 0.5, SCREEN_WIDTH - 25, cardH - 1);
+        ctx.setLineDash([]);
+        ctx.restore();
+        this.drawText('＋  空位 ' + slot.slotId + '  —  新建存档', SCREEN_WIDTH / 2, y + cardH / 2 - 9, 17, '#3a5a48', 'center');
+        this.addButton(12, y, SCREEN_WIDTH - 24, cardH, '', () => {
           this.beginNewGame(slot.slotId);
-          }, { border: COLORS.green, color: COLORS.green, fill: '#062012', fontSize: 20 });
+        }, { border: 'transparent', color: 'transparent', fill: 'transparent', fontSize: 1, silent: true });
       } else {
         const data = slot.data || {};
         const spirits = data.spirits || [];
-        const stations = data.spiritStations || [];
-        const maxLv = spirits.length > 0 ? Math.max(...spirits.map((s) => s.level)) : 1;
-          const timestamp = new Date(slot.updatedAt || slot.createdAt).toLocaleDateString('zh-CN');
-        
-          // 日期
-          this.drawText(timestamp, 30, y + 44, 16, '#a4b3d7');
-        
-          // 精灵与经济信息（两行）
-          this.drawText('背包: ' + spirits.length + '只  精灵站: ' + stations.length + '只', 30, y + 66, 16, COLORS.green);
-          this.drawText('铜钱: ' + (data.player ? data.player.gold : 0) + '  已解锁: ' + (data.highestAreaUnlocked || 1) + '/9  等级: ' + maxLv, 30, y + 86, 16, '#8ea1c8');
+        const rawStations = data.spiritStations || [];
+        const stations = Array.isArray(rawStations)
+          ? rawStations
+          : Object.values(rawStations).reduce((a, v) => a.concat(Array.isArray(v) ? v : []), []);
+        const maxLv = spirits.length > 0 ? Math.max(...spirits.map((s) => s.level || 1)) : 1;
+        const timestamp = new Date(slot.updatedAt || slot.createdAt).toLocaleDateString('zh-CN');
+        const isConfirming = this.confirmDeleteSlot === slot.slotId;
 
-          this.addButton(SCREEN_WIDTH - 210, y + 42, 88, 48, '读取', () => {
+        this.drawBox(12, y, SCREEN_WIDTH - 24, cardH, '#263040', '#060f1c');
+
+        // 行1：存档名 + 日期
+        this.drawText('存档 ' + slot.slotId, 26, y + 14, 22, COLORS.text);
+        this.drawText(timestamp, 116, y + 18, 13, '#5a6984');
+
+        // 行2：背包 + 精灵站（带图标色）
+        this.drawText('◆ 背包:' + spirits.length + '只', 26, y + 48, 16, COLORS.green);
+        this.drawText('◈ 精灵站:' + stations.length + '只', 128, y + 48, 16, COLORS.cyan);
+
+        // 行3：铜钱 / 已解锁 / 最高等级
+        this.drawText('铜钱:' + (data.player ? data.player.gold : 0), 26, y + 76, 14, COLORS.yellow);
+        this.drawText('已解锁:' + (data.highestAreaUnlocked || 1) + '/9区', 118, y + 76, 14, '#7a8aaa');
+        this.drawText('最高等级:' + maxLv, 238, y + 76, 14, '#7a8aaa');
+
+        // 右侧按钮区中线
+        const btnMidY = y + cardH / 2 - 24;
+
+        // ▶ 读取
+        this.addButton(SCREEN_WIDTH - 120, btnMidY, 48, 48, '▶', () => {
           if (this.databus.loadFromSlot(slot.slotId)) {
+            this.confirmDeleteSlot = null;
             this.setToast('读取存档成功。');
             this.gotoScreen('areaSelect');
           } else {
             this.setToast('读取失败。');
           }
-          }, { border: COLORS.green, color: COLORS.green, fill: '#062012', fontSize: 18 });
+        }, { border: COLORS.green, color: COLORS.green, fill: '#051a0d', fontSize: 22 });
 
-          this.addButton(SCREEN_WIDTH - 110, y + 42, 88, 48, '删除', () => {
-          if (this.databus.deleteSlot(slot.slotId)) {
-            this.setToast('已删除存档 ' + slot.slotId + '。');
-          }
-          }, { border: '#66333d', color: COLORS.red, fill: '#1a0b11', fontSize: 18 });
+        if (isConfirming) {
+          // 二次确认删除
+          this.addButton(SCREEN_WIDTH - 68, btnMidY, 52, 22, '确认', () => {
+            if (this.databus.deleteSlot(slot.slotId)) {
+              this.setToast('已删除存档 ' + slot.slotId + '。');
+              this.confirmDeleteSlot = null;
+            }
+          }, { border: COLORS.red, color: COLORS.red, fill: '#1a0808', fontSize: 13 });
+          this.addButton(SCREEN_WIDTH - 68, btnMidY + 26, 52, 22, '取消', () => {
+            this.confirmDeleteSlot = null;
+          }, { border: '#3a4a5a', color: '#7a8aaa', fill: '#0a0f18', fontSize: 13 });
+        } else {
+          // ✕ 删除
+          this.addButton(SCREEN_WIDTH - 68, btnMidY, 48, 48, '✕', () => {
+            this.confirmDeleteSlot = slot.slotId;
+          }, { border: '#3a3a50', color: '#6a6a8a', fill: '#0d0d18', fontSize: 22 });
+        }
       }
 
-        y += h + 12;
+      y += cardH + 10;
     }
 
-      this.addButton(16, SCREEN_HEIGHT - 176, 130, 50, '返回', () => {
+    // 底部导航栏
+    const navY = SCREEN_HEIGHT - 60;
+    this.addButton(12, navY, 110, 46, '← 返回', () => {
+      this.confirmDeleteSlot = null;
       this.gotoScreen('start');
-      }, { border: '#2f3a56', color: COLORS.dim, fill: '#080f1f', fontSize: 20 });
-
-      this.addButton(158, SCREEN_HEIGHT - 176, 130, 50, '上一页', () => {
+    }, { border: '#2f3a56', color: COLORS.dim, fill: '#080f1f', fontSize: 17 });
+    this.addButton(134, navY, 96, 46, '上一页', () => {
       this.databus.setPage('saveManager', pageData.page - 1);
-      }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 20 });
-
-      this.addButton(300, SCREEN_HEIGHT - 176, 130, 50, '下一页', () => {
+      this.confirmDeleteSlot = null;
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 17 });
+    this.addButton(242, navY, 96, 46, '下一页', () => {
       this.databus.setPage('saveManager', pageData.page + 1);
-      }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 20 });
-
-      this.drawText((pageData.page + 1) + '/' + pageData.totalPages, SCREEN_WIDTH - 20, SCREEN_HEIGHT - 170, 18, '#5d6f96', 'right');
+      this.confirmDeleteSlot = null;
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#081327', fontSize: 17 });
+    this.drawText((pageData.page + 1) + '/' + pageData.totalPages, SCREEN_WIDTH - 12, navY + 14, 14, '#5d6f96', 'right');
   }
 
   drawChooseStarterScreen(fromReward) {
@@ -1628,16 +1662,17 @@ export default class Main {
     }
 
     // 分页按钮
-    const btnY = SCREEN_HEIGHT - 58;
-    this.addButton(8, btnY, 100, 44, '上一页', () => {
-      this.databus.setPage(pageKey, pgData.page - 1);
-    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#060d18', fontSize: 16 });
+    const paginateAreaH = SCREEN_HEIGHT - tbH - 70;
+    const btnY = tbH + paginateAreaH + 18;
+    this.addButton(8, btnY, 100, 44, '← 返回', () => {
+      this.gotoScreen('start');
+    }, { border: COLORS.green, color: COLORS.green, fill: '#051a10', fontSize: 16 });
     this.addButton(SCREEN_WIDTH - 108, btnY, 100, 44, '下一页', () => {
       this.databus.setPage(pageKey, pgData.page + 1);
     }, { border: '#2f3a56', color: COLORS.cyan, fill: '#060d18', fontSize: 16 });
-    this.addButton(Math.round((SCREEN_WIDTH - 180) / 2), btnY, 180, 44, '关闭', () => {
-      this.gotoScreen('start');
-    }, { border: COLORS.green, color: COLORS.green, fill: '#051a10', fontSize: 18 });
+    this.addButton(Math.round((SCREEN_WIDTH - 100) / 2), btnY, 100, 44, '上一页', () => {
+      this.databus.setPage(pageKey, pgData.page - 1);
+    }, { border: '#2f3a56', color: COLORS.cyan, fill: '#060d18', fontSize: 16 });
 
     this.drawText((pgData.page + 1) + '/' + pgData.totalPages, SCREEN_WIDTH / 2, btnY + 14, 14, '#3f4f6a', 'center');
   }
